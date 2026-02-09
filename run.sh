@@ -225,7 +225,7 @@ apply_option1() {
     print_success "Option 1 applied successfully!"
     echo ""
     print_warning "Next step: Rebuild OpenCode"
-    echo "  Run: ${BOLD}bun run build${NC}"
+    echo "  Run: ${BOLD}./build.sh${NC}"
 }
 
 # Apply Option 2
@@ -260,7 +260,7 @@ apply_option2() {
     print_success "Option 2 applied successfully!"
     echo ""
     print_warning "Next step: Rebuild OpenCode"
-    echo "  Run: ${BOLD}bun run build${NC}"
+    echo "  Run: ${BOLD}./build.sh${NC}"
 }
 
 # Restore original
@@ -292,7 +292,7 @@ restore_original() {
     print_success "Original configuration restored"
     echo ""
     print_warning "Next step: Rebuild OpenCode"
-    echo "  Run: ${BOLD}bun run build${NC}"
+    echo "  Run: ${BOLD}./build.sh${NC}"
 }
 
 # View documentation
@@ -380,7 +380,7 @@ verify_setup() {
     if [ -d "packages/opencode/dist" ]; then
         print_success "Build directory exists"
     else
-        print_warning "Build directory not found - you may need to run: bun run build"
+        print_warning "Build directory not found - you may need to run: ./build.sh"
     fi
     
     # Check patch files
@@ -453,9 +453,9 @@ quick_fix() {
         if [[ $build =~ ^[Yy]$ ]]; then
             echo ""
             print_info "Running build..."
-            bun run build
+            ./build.sh
         else
-            print_warning "Don't forget to run: ${BOLD}bun run build${NC}"
+            print_warning "Don't forget to run: ${BOLD}./build.sh${NC}"
         fi
     else
         echo "Cancelled."
