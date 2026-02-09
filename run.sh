@@ -324,6 +324,125 @@ view_docs() {
     esac
 }
 
+# Verify installation
+verify_installation() {
+    print_header "🔍 INSTALLATION VERIFICATION"
+    
+    echo "Checking OpenCode installation..."
+    echo ""
+    
+    local issues=0
+    
+    # Check which opencode binary is in use
+    print_section "1. Global OpenCode Command"
+    if command -v opencode &> /dev/null; then
+        local opencode_path=$(which opencode)
+        print_success "opencode command found"
+        echo "  Location: $opencode_path"
+        
+        # Check version
+        if [ -x "$opencode_path" ]; then
+            echo -n "  Version: "
+            "$opencode_path" --version 2>/dev/null || echo "Unable to determine"
+        fi
+        
+        # Determine source
+        echo -n "  Source: "
+        if [[ "$opencode_path" == *"/.local/bin/"* ]]; then
+            print_success "Local build (via install.sh)"
+        elif [[ "$opencode_path" == *"/.bun/bin/"* ]]; then
+            print_warning "Bun global install"
+            echo "    ${YELLOW}ℹ${NC} Consider using local build for patched version"
+            echo "    Run: ${BOLD}./install.sh${NC}"
+        elif [[ "$opencode_path" == *"/node_modules/"* ]]; then
+            print_warning "npm/yarn install"
+            echo "    ${YELLOW}ℹ${NC} Consider using local build for patched version"
+            echo "    Run: ${BOLD}./install.sh${NC}"
+        else
+            print_info "Unknown ($opencode_path)"
+        fi
+    else
+        print_warning "opencode command not found in PATH"
+        echo "  ${YELLOW}ℹ${NC} Run: ${BOLD}./install.sh${NC} to install locally"
+        issues=$((issues + 1))
+    fi
+    
+    # Check local build
+    print_section "2. Local Build Status"
+    if [ -d "packages/opencode/dist" ]; then
+        print_success "Build directory exists"
+        
+        # Detect platform
+        local platform=""
+        case "$(uname -s)" in
+            Linux*)     platform="linux" ;;
+            Darwin*)    platform="darwin" ;;
+            MINGW*|MSYS*|CYGWIN*) platform="windows" ;;
+            *)          platform="unknown" ;;
+        esac
+        
+        local arch=""
+        case "$(uname -m)" in
+            x86_64|amd64) arch="x64" ;;
+            aarch64|arm64) arch="arm64" ;;
+            *) arch="unknown" ;;
+        esac
+        
+        if [ "$platform" != "unknown" ] && [ "$arch" != "unknown" ]; then
+            local binary_path="packages/opencode/dist/opencode-${platform}-${arch}/bin/opencode"
+            if [ -f "$binary_path" ]; then
+                print_success "Platform binary found: opencode-${platform}-${arch}"
+                echo "  Path: $binary_path"
+                
+                # Check if executable
+                if [ -x "$binary_path" ]; then
+                    print_success "Binary is executable"
+                else
+                    print_warning "Binary is not executable"
+                    echo "  Run: ${BOLD}chmod +x $binary_path${NC}"
+                fi
+            else
+                print_warning "Platform binary not found for ${platform}-${arch}"
+                echo "  Expected: $binary_path"
+                echo "  ${YELLOW}ℹ${NC} Run: ${BOLD}./build.sh${NC} to build"
+                issues=$((issues + 1))
+            fi
+        fi
+    else
+        print_warning "Build directory not found"
+        echo "  ${YELLOW}ℹ${NC} Run: ${BOLD}./build.sh${NC} to build"
+        issues=$((issues + 1))
+    fi
+    
+    # Check install script
+    print_section "3. Install Scripts"
+    if [ -f "$SCRIPT_DIR/install.sh" ] && [ -x "$SCRIPT_DIR/install.sh" ]; then
+        print_success "install.sh available"
+    else
+        print_error "install.sh missing or not executable"
+        issues=$((issues + 1))
+    fi
+    
+    if [ -f "$SCRIPT_DIR/uninstall.sh" ] && [ -x "$SCRIPT_DIR/uninstall.sh" ]; then
+        print_success "uninstall.sh available"
+    else
+        print_warning "uninstall.sh missing or not executable"
+    fi
+    
+    # Summary
+    echo ""
+    print_section "📋 SUMMARY"
+    if [ $issues -eq 0 ]; then
+        print_success "Installation looks good! ✨"
+    else
+        print_warning "$issues issue(s) found"
+        echo ""
+        echo "Recommendations:"
+        echo "  1. Run: ${BOLD}./build.sh${NC} to build the binary"
+        echo "  2. Run: ${BOLD}./install.sh${NC} to install globally"
+    fi
+}
+
 # Verify setup
 verify_setup() {
     print_header "🔍 VERIFICATION"
@@ -428,6 +547,214 @@ verify_setup() {
     fi
 }
 
+# Install locally
+install_local() {
+    print_header "📥 LOCAL INSTALLATION"
+    
+    echo "This will install the locally-built OpenCode binary globally."
+    echo ""
+    
+    # Check if build exists
+    if [ ! -d "packages/opencode/dist" ]; then
+        print_error "Build not found!"
+        echo ""
+        echo "Please build OpenCode first:"
+        echo "  ${BOLD}./build.sh${NC}"
+        echo ""
+        read -p "Build now? (y/N): " build
+        if [[ $build =~ ^[Yy]$ ]]; then
+            ./build.sh
+        else
+            return
+        fi
+    fi
+    
+    print_info "Installation details:"
+    echo "  • Default location: ~/.local/bin/opencode"
+    echo "  • Custom location: Set INSTALL_DIR environment variable"
+    echo "  • Symlinks to: packages/opencode/dist/opencode-<platform>/bin/opencode"
+    echo ""
+    
+    read -p "Install now? (y/N): " confirm
+    
+    if [[ $confirm =~ ^[Yy]$ ]]; then
+        echo ""
+        if [ -f "$SCRIPT_DIR/install.sh" ]; then
+            "$SCRIPT_DIR/install.sh"
+            echo ""
+            print_success "Installation complete!"
+            echo ""
+            print_info "Verify with: ${BOLD}which opencode${NC}"
+            print_info "Run with: ${BOLD}opencode${NC}"
+            echo ""
+            
+            # Check if ~/.local/bin is in PATH
+            if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+                print_warning "~/.local/bin is not in your PATH"
+                echo ""
+                echo "Add to your shell config (~/.bashrc or ~/.zshrc):"
+                echo "  ${BOLD}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
+                echo ""
+                echo "Then reload: ${BOLD}source ~/.bashrc${NC} or ${BOLD}source ~/.zshrc${NC}"
+            fi
+        else
+            print_error "install.sh not found!"
+        fi
+    else
+        echo "Cancelled."
+    fi
+}
+
+# Uninstall local
+uninstall_local() {
+    print_header "🗑️  UNINSTALL LOCAL"
+    
+    echo "This will remove the locally-installed OpenCode symlink."
+    echo ""
+    
+    if [ -f "$SCRIPT_DIR/uninstall.sh" ]; then
+        read -p "Uninstall now? (y/N): " confirm
+        
+        if [[ $confirm =~ ^[Yy]$ ]]; then
+            echo ""
+            "$SCRIPT_DIR/uninstall.sh"
+            echo ""
+            print_success "Uninstallation complete!"
+        else
+            echo "Cancelled."
+        fi
+    else
+        print_error "uninstall.sh not found!"
+    fi
+}
+
+# Build OpenCode
+build_opencode() {
+    print_header "🔨 BUILD OPENCODE"
+    
+    local state=$(detect_state)
+    
+    echo "Current configuration: "
+    case $state in
+        "option1") echo "  ${GREEN}✓${NC} Option 1 (Session-based billing, basic features)" ;;
+        "option2") echo "  ${GREEN}✓${NC} Option 2 (Session-based billing, all features)" ;;
+        "original") echo "  ${YELLOW}⚠${NC} Original (Per-message billing - expensive!)" ;;
+    esac
+    echo ""
+    
+    if [ "$state" = "original" ]; then
+        print_warning "You're about to build with expensive configuration!"
+        echo "Consider applying Option 1 or 2 first."
+        echo ""
+        read -p "Continue anyway? (y/N): " confirm
+        if [[ ! $confirm =~ ^[Yy]$ ]]; then
+            echo "Cancelled."
+            return
+        fi
+    fi
+    
+    echo ""
+    print_info "Building OpenCode..."
+    echo ""
+    
+    if [ -f "$SCRIPT_DIR/build.sh" ]; then
+        "$SCRIPT_DIR/build.sh"
+        echo ""
+        print_success "Build complete!"
+        echo ""
+        read -p "Install locally now? (y/N): " install
+        if [[ $install =~ ^[Yy]$ ]]; then
+            install_local
+        fi
+    else
+        print_error "build.sh not found!"
+        echo ""
+        print_info "Manual build command:"
+        echo "  ${BOLD}bun run --cwd packages/opencode script/build.ts${NC}"
+    fi
+}
+
+# Test billing
+test_billing() {
+    print_header "🧪 BILLING TEST GUIDE"
+    
+    local state=$(detect_state)
+    
+    echo "This guide will help you verify that session-based billing is working."
+    echo ""
+    
+    print_section "Current Configuration"
+    case $state in
+        "option1")
+            print_success "Option 1 is active"
+            echo "  Expected: 1 premium request per session"
+            ;;
+        "option2")
+            print_success "Option 2 is active"
+            echo "  Expected: 1 premium request per session"
+            ;;
+        "original")
+            print_warning "Original (expensive) configuration"
+            echo "  Expected: 1 premium request PER MESSAGE"
+            echo ""
+            print_error "⚠️  Apply Option 1 or 2 before testing!"
+            return
+            ;;
+    esac
+    
+    echo ""
+    print_section "Test Procedure"
+    
+    echo "1. Check current Copilot usage:"
+    echo "   • Go to: https://github.com/settings/copilot"
+    echo "   • Note current premium request count"
+    echo ""
+    
+    echo "2. Start a new OpenCode session:"
+    echo "   • Run: ${BOLD}opencode${NC}"
+    echo "   • Send 10 simple messages (e.g., 'hello', 'test', etc.)"
+    echo "   • Exit the session"
+    echo ""
+    
+    echo "3. Check Copilot usage again:"
+    echo "   • Refresh: https://github.com/settings/copilot"
+    echo "   • Check premium request count"
+    echo ""
+    
+    echo "4. Verify results:"
+    echo ""
+    if [ "$state" = "option1" ] || [ "$state" = "option2" ]; then
+        print_success "Expected: +1 premium request (not +10)"
+        echo ""
+        echo "   ✅ If increased by 1: Session-based billing works!"
+        echo "   ❌ If increased by 10: Something is wrong"
+    fi
+    echo ""
+    
+    print_section "Troubleshooting"
+    echo "If billing is still per-message:"
+    echo ""
+    echo "1. Verify configuration:"
+    echo "   ${BOLD}./run.sh verify${NC}"
+    echo ""
+    echo "2. Check that you're using the locally-built binary:"
+    echo "   ${BOLD}./run.sh check-install${NC}"
+    echo ""
+    echo "3. Rebuild and reinstall:"
+    echo "   ${BOLD}./build.sh && ./install.sh${NC}"
+    echo ""
+    echo "4. Check plugin loading in OpenCode logs:"
+    
+    if [ "$state" = "option1" ]; then
+        echo "   Look for: 'loading plugin { path: \"opencode-copilot-auth@0.0.12\" }'"
+    elif [ "$state" = "option2" ]; then
+        echo "   Verify x-initiator is only set for subagent requests"
+    fi
+    
+    echo ""
+    read -p "Press Enter to continue..."
+}
+
 # Quick actions
 quick_fix() {
     print_header "⚡ QUICK FIX"
@@ -454,6 +781,11 @@ quick_fix() {
             echo ""
             print_info "Running build..."
             ./build.sh
+            echo ""
+            read -p "Install locally now? (y/N): " install
+            if [[ $install =~ ^[Yy]$ ]]; then
+                install_local
+            fi
         else
             print_warning "Don't forget to run: ${BOLD}./build.sh${NC}"
         fi
@@ -473,36 +805,50 @@ show_menu() {
     print_section "MAIN MENU"
     
     echo "  ${BOLD}Quick Actions:${NC}"
-    echo "    1. ⚡ Quick Fix (Apply Option 1 + Build)        - Fastest solution"
+    echo "    1. ⚡ Quick Fix (Apply + Build + Install)     - Complete setup"
     echo ""
     echo "  ${BOLD}Apply Patches:${NC}"
-    echo "    2. 📦 Apply Option 1 (Simple Revert)           - Recommended for most"
-    echo "    3. 🔧 Apply Option 2 (Keep Features)           - For power users"
-    echo "    4. ↩️  Restore Original (Expensive)             - Undo patches"
+    echo "    2. 📦 Apply Option 1 (Simple Revert)         - Recommended for most"
+    echo "    3. 🔧 Apply Option 2 (Keep Features)         - For power users"
+    echo "    4. ↩️  Restore Original (Expensive)           - Undo patches"
+    echo ""
+    echo "  ${BOLD}Build & Install:${NC}"
+    echo "    5. 🔨 Build OpenCode                         - Build binary"
+    echo "    6. 📥 Install Locally                        - Install to ~/.local/bin"
+    echo "    7. 🗑️  Uninstall Local                       - Remove local install"
+    echo ""
+    echo "  ${BOLD}Verification & Testing:${NC}"
+    echo "    8. 🔍 Verify Patch Configuration             - Check patches"
+    echo "    9. 🔍 Check Installation                     - Check binary location"
+    echo "   10. 🧪 Billing Test Guide                     - Test session billing"
     echo ""
     echo "  ${BOLD}Information:${NC}"
-    echo "    5. 💰 Show Cost Comparison                     - See savings"
-    echo "    6. 📋 Show Option Details                      - Compare options"
-    echo "    7. 🔍 Verify Current Setup                     - Check everything"
-    echo "    8. 📚 View Documentation                       - Read guides"
+    echo "   11. 💰 Show Cost Comparison                   - See savings"
+    echo "   12. 📋 Show Option Details                    - Compare options"
+    echo "   13. 📚 View Documentation                     - Read guides"
     echo ""
     echo "  ${BOLD}Other:${NC}"
-    echo "    9. 🔄 Refresh Status                           - Update display"
+    echo "   14. 🔄 Refresh Status                         - Update display"
     echo "    0. 🚪 Exit"
     echo ""
     
-    read -p "Select an option (0-9): " choice
+    read -p "Select an option (0-14): " choice
     
     case $choice in
         1) quick_fix ;;
         2) apply_option1 ;;
         3) apply_option2 ;;
         4) restore_original ;;
-        5) show_cost_comparison ;;
-        6) show_option_details ;;
-        7) verify_setup ;;
-        8) view_docs ;;
-        9) return ;;
+        5) build_opencode ;;
+        6) install_local ;;
+        7) uninstall_local ;;
+        8) verify_setup ;;
+        9) verify_installation ;;
+        10) test_billing ;;
+        11) show_cost_comparison ;;
+        12) show_option_details ;;
+        13) view_docs ;;
+        14) return ;;
         0) 
             echo ""
             print_info "Thanks for using Copilot Billing Fix!"
@@ -541,6 +887,21 @@ main() {
             "verify")
                 verify_setup
                 ;;
+            "check-install"|"verify-install")
+                verify_installation
+                ;;
+            "install")
+                install_local
+                ;;
+            "uninstall")
+                uninstall_local
+                ;;
+            "build")
+                build_opencode
+                ;;
+            "test"|"test-billing")
+                test_billing
+                ;;
             "quick"|"fix")
                 quick_fix
                 ;;
@@ -548,13 +909,18 @@ main() {
                 echo "Usage: $0 [command]"
                 echo ""
                 echo "Commands:"
-                echo "  status      - Show current status"
-                echo "  apply1      - Apply Option 1 (simple revert)"
-                echo "  apply2      - Apply Option 2 (keep features)"
-                echo "  restore     - Restore original"
-                echo "  verify      - Verify setup"
-                echo "  quick       - Quick fix (apply option 1)"
-                echo "  help        - Show this help"
+                echo "  status           - Show current status"
+                echo "  apply1           - Apply Option 1 (simple revert)"
+                echo "  apply2           - Apply Option 2 (keep features)"
+                echo "  restore          - Restore original"
+                echo "  verify           - Verify patch configuration"
+                echo "  check-install    - Check installation location"
+                echo "  install          - Install locally to ~/.local/bin"
+                echo "  uninstall        - Remove local install"
+                echo "  build            - Build OpenCode"
+                echo "  test-billing     - Show billing test guide"
+                echo "  quick            - Quick fix (apply + build + install)"
+                echo "  help             - Show this help"
                 echo ""
                 echo "Run without arguments for interactive menu."
                 ;;
