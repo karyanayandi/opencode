@@ -1,0 +1,27 @@
+diff --git a/packages/opencode/src/plugin/copilot.ts b/packages/opencode/src/plugin/copilot.ts
+index 39ea0d00d..modified 100644
+--- a/packages/opencode/src/plugin/copilot.ts
++++ b/packages/opencode/src/plugin/copilot.ts
+@@ -119,8 +119,11 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
+             })
+ 
+             const headers: Record<string, string> = {
+-              "x-initiator": isAgent ? "agent" : "user",
+               ...(init?.headers as Record<string, string>),
++              // Only set x-initiator for subagent requests to avoid per-message premium billing
++              // Regular user messages won't include this header, resulting in session-based billing like v1.1.10
++              ...(isAgent ? { "x-initiator": "agent" } : {}),
++              
+               "User-Agent": `opencode/${Installation.VERSION}`,
+               Authorization: `Bearer ${info.refresh}`,
+               "Openai-Intent": "conversation-edits",
+@@ -270,7 +273,8 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
+         })
+         .catch(() => undefined)
+       if (!session || !session.data.parentID) return
+-      // mark subagent sessions as agent initiated matching standard that other copilot tools have
++      // Mark subagent sessions as agent initiated to avoid counting against quota
++      // This works with the conditional x-initiator logic above
+       output.headers["x-initiator"] = "agent"
+     },
+   }
