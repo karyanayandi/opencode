@@ -8,7 +8,7 @@ set -e
 # Usage: ./apply-option2-billing-fix.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PATCH_FILE="$SCRIPT_DIR/restore-v1110-billing-keep-features.patch"
+PATCH_FILE="$SCRIPT_DIR/restore-v1110-billing-correct.patch"
 
 echo "======================================================================"
 echo "Applying Option 2: Session-Based Billing + All Features"
@@ -56,7 +56,7 @@ fi
 echo "Checking if patch can be applied..."
 
 # Check if already applied
-if grep -q "Only set x-initiator for subagent requests" packages/opencode/src/plugin/copilot.ts; then
+if grep -q "Use npm plugin logic: check if ANY message has role" packages/opencode/src/plugin/copilot.ts; then
     echo "✓ Patch already applied!"
     echo ""
     echo "The billing fix is already in place."
@@ -85,12 +85,15 @@ else
         echo "  - You have local modifications"
         echo ""
         echo "Manual fix:"
-        echo "  Edit packages/opencode/src/plugin/copilot.ts around line 121-122"
+        echo "  Edit packages/opencode/src/plugin/copilot.ts"
         echo ""
-        echo "  Change from:"
-        echo '    "x-initiator": isAgent ? "agent" : "user",'
+        echo "  In Completions API section (~line 11):"
+        echo '    const isAgent = body.messages.some((msg: any) => msg.role && ["tool", "assistant"].includes(msg.role))'
         echo ""
-        echo "  To:"
+        echo "  In Messages API section (~line 63):"
+        echo '    const isAgent = body.messages.some((msg: any) => msg.role && ["tool", "assistant"].includes(msg.role))'
+        echo ""
+        echo "  In headers section (~line 83):"
         echo '    ...(isAgent ? { "x-initiator": "agent" } : {}),'
         echo ""
         exit 1

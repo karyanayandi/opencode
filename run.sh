@@ -63,7 +63,7 @@ check_environment() {
 detect_state() {
     if [ ! -f "packages/opencode/src/plugin/copilot.ts" ]; then
         echo "option1"  # Option 1 applied (no built-in plugin)
-    elif grep -q "Only set x-initiator for subagent requests" "packages/opencode/src/plugin/copilot.ts" 2>/dev/null; then
+    elif grep -q "Use npm plugin logic: check if ANY message has role" "packages/opencode/src/plugin/copilot.ts" 2>/dev/null; then
         echo "option2"  # Option 2 applied (modified built-in)
     else
         echo "original"  # Original (expensive) state
@@ -117,7 +117,7 @@ show_status() {
     if [ -f "$SCRIPT_DIR/revert-copilot-official-plugin.patch" ]; then
         echo "  ✓ Option 1 patch available"
     fi
-    if [ -f "$SCRIPT_DIR/restore-v1110-billing-keep-features.patch" ]; then
+    if [ -f "$SCRIPT_DIR/restore-v1110-billing-correct.patch" ]; then
         echo "  ✓ Option 2 patch available"
     fi
 }
@@ -480,7 +480,7 @@ verify_setup() {
             print_success "Option 2 is active"
             
             # Check if modification is present
-            if grep -q "Only set x-initiator for subagent requests" "packages/opencode/src/plugin/copilot.ts"; then
+            if grep -q "Use npm plugin logic: check if ANY message has role" "packages/opencode/src/plugin/copilot.ts"; then
                 print_success "Built-in plugin modified correctly"
             else
                 print_error "Built-in plugin not modified correctly"
@@ -511,7 +511,7 @@ verify_setup() {
         issues=$((issues + 1))
     fi
     
-    if [ -f "$SCRIPT_DIR/restore-v1110-billing-keep-features.patch" ]; then
+    if [ -f "$SCRIPT_DIR/restore-v1110-billing-correct.patch" ]; then
         print_success "Option 2 patch available"
     else
         print_error "Option 2 patch missing"
