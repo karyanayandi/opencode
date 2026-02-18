@@ -1,99 +1,56 @@
 diff --git a/packages/opencode/src/plugin/copilot.ts b/packages/opencode/src/plugin/copilot.ts
-index 39ea0d00d..189d5597d 100644
+index 39ea0d00d..32f1573cf 100644
 --- a/packages/opencode/src/plugin/copilot.ts
 +++ b/packages/opencode/src/plugin/copilot.ts
-@@ -71,33 +71,56 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
+@@ -69,6 +69,16 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
+               try {
+                 const body = typeof init?.body === "string" ? JSON.parse(init.body) : init?.body
  
++                // A user message whose content consists entirely of tool results is a
++                // synthetic wrapper created by opencode (required by Anthropic/OpenAI APIs
++                // to pair every tool_use with a tool_result). These should be treated as
++                // agent-initiated, not user-initiated, to avoid charging premium requests.
++                const isSyntheticToolResult = (last: any) =>
++                  last?.role === "user" &&
++                  Array.isArray(last.content) &&
++                  last.content.length > 0 &&
++                  last.content.every((part: any) => part?.type === "tool_result" || part?.type === "tool")
++
                  // Completions API
                  if (body?.messages && url.includes("completions")) {
--                  const last = body.messages[body.messages.length - 1]
-+                  // Use npm plugin logic: check if ANY message has role "tool" or "assistant"
-+                  // This ensures session-based billing (after first tool use, all subsequent messages are treated as agent calls)
-+                  const isAgent = body.messages.some((msg: any) => msg.role && ["tool", "assistant"].includes(msg.role))
-                   return {
-                     isVision: body.messages.some(
+                   const last = body.messages[body.messages.length - 1]
+@@ -77,7 +87,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
                        (msg: any) =>
                          Array.isArray(msg.content) && msg.content.some((part: any) => part.type === "image_url"),
                      ),
 -                    isAgent: last?.role !== "user",
-+                    isAgent,
++                    isAgent: last?.role !== "user" || isSyntheticToolResult(last),
                    }
                  }
  
-                 // Responses API
-                 if (body?.input) {
-+                  // Use npm plugin logic for Responses API
-                   const last = body.input[body.input.length - 1]
-+                  const isAssistant = last?.role === "assistant"
-+                  const RESPONSES_API_ALTERNATE_INPUT_TYPES = [
-+                    "file_search_call",
-+                    "computer_call",
-+                    "computer_call_output",
-+                    "web_search_call",
-+                    "function_call",
-+                    "function_call_output",
-+                    "image_generation_call",
-+                    "code_interpreter_call",
-+                    "local_shell_call",
-+                    "local_shell_call_output",
-+                    "mcp_list_tools",
-+                    "mcp_approval_request",
-+                    "mcp_approval_response",
-+                    "mcp_call",
-+                    "reasoning",
-+                  ]
-+                  const hasAgentType = last?.type ? RESPONSES_API_ALTERNATE_INPUT_TYPES.includes(last.type) : false
-+                  const isAgent = isAssistant || hasAgentType
-+
-                   return {
-                     isVision: body.input.some(
+@@ -89,15 +99,13 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
                        (item: any) =>
                          Array.isArray(item?.content) && item.content.some((part: any) => part.type === "input_image"),
                      ),
 -                    isAgent: last?.role !== "user",
-+                    isAgent,
++                    isAgent: last?.role !== "user" || isSyntheticToolResult(last),
                    }
                  }
  
                  // Messages API
                  if (body?.messages) {
--                  const last = body.messages[body.messages.length - 1]
+                   const last = body.messages[body.messages.length - 1]
 -                  const hasNonToolCalls =
 -                    Array.isArray(last?.content) && last.content.some((part: any) => part?.type !== "tool_result")
-+                  // Use npm plugin logic: check if ANY message has role "tool" or "assistant"
-+                  const isAgent = body.messages.some((msg: any) => msg.role && ["tool", "assistant"].includes(msg.role))
                    return {
                      isVision: body.messages.some(
                        (item: any) =>
-@@ -111,7 +134,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
+@@ -111,7 +119,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
                                part.content.some((nested: any) => nested?.type === "image")),
                          ),
                      ),
 -                    isAgent: !(last?.role === "user" && hasNonToolCalls),
-+                    isAgent,
++                    isAgent: last?.role !== "user" || isSyntheticToolResult(last),
                    }
                  }
                } catch {}
-@@ -119,8 +142,11 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
-             })
- 
-             const headers: Record<string, string> = {
--              "x-initiator": isAgent ? "agent" : "user",
-               ...(init?.headers as Record<string, string>),
-+              // Only set x-initiator for subagent requests to avoid per-message premium billing
-+              // Regular user messages won't include this header, resulting in session-based billing like v1.1.10
-+              ...(isAgent ? { "x-initiator": "agent" } : {}),
-+
-               "User-Agent": `opencode/${Installation.VERSION}`,
-               Authorization: `Bearer ${info.refresh}`,
-               "Openai-Intent": "conversation-edits",
-@@ -320,7 +346,8 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
-         })
-         .catch(() => undefined)
-       if (!session || !session.data.parentID) return
--      // mark subagent sessions as agent initiated matching standard that other copilot tools have
-+      // Mark subagent sessions as agent initiated to avoid counting against quota
-+      // This works with the conditional x-initiator logic above
-       output.headers["x-initiator"] = "agent"
-     },
-   }
