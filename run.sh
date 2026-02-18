@@ -600,6 +600,55 @@ install_local() {
     fi
 }
 
+# Install as ocode
+install_ocode() {
+    print_header "🔗 INSTALL AS ocode"
+
+    echo "This installs the patched binary as 'ocode' in ~/.local/bin"
+    echo "so it runs alongside the global 'opencode' (1.1.10) from bun."
+    echo ""
+
+    # Detect platform
+    local platform arch
+    case "$(uname -s)" in
+        Linux*)  platform="linux" ;;
+        Darwin*) platform="darwin" ;;
+        *)       print_error "Unsupported platform"; return ;;
+    esac
+    case "$(uname -m)" in
+        x86_64|amd64)   arch="x64" ;;
+        aarch64|arm64)  arch="arm64" ;;
+        *)              print_error "Unsupported arch"; return ;;
+    esac
+
+    local binary="$SCRIPT_DIR/packages/opencode/dist/opencode-${platform}-${arch}/bin/opencode"
+
+    if [ ! -f "$binary" ]; then
+        print_error "Binary not found: $binary"
+        echo ""
+        echo "Build first: ${BOLD}./run.sh build${NC}"
+        return
+    fi
+
+    mkdir -p "$HOME/.local/bin"
+    cp "$binary" "$HOME/.local/bin/ocode"
+    chmod +x "$HOME/.local/bin/ocode"
+    print_success "Copied to ~/.local/bin/ocode"
+    echo ""
+
+    # Verify
+    if command -v ocode &>/dev/null; then
+        echo "  opencode (global): $(opencode --version 2>/dev/null || echo 'unknown')"
+        echo "  ocode    (patched): $(ocode --version 2>/dev/null || echo 'unknown')"
+    else
+        print_warning "~/.local/bin is not in your PATH"
+        echo ""
+        echo "Add to your shell config (~/.bashrc or ~/.zshrc):"
+        echo "  ${BOLD}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
+        echo "Then reload: ${BOLD}source ~/.bashrc${NC}"
+    fi
+}
+
 # Uninstall local
 uninstall_local() {
     print_header "🗑️  UNINSTALL LOCAL"
@@ -657,9 +706,9 @@ build_opencode() {
         echo ""
         print_success "Build complete!"
         echo ""
-        read -p "Install locally now? (y/N): " install
+        read -p "Install as ocode now? (y/N): " install
         if [[ $install =~ ^[Yy]$ ]]; then
-            install_local
+            install_ocode
         fi
     else
         print_error "build.sh not found!"
@@ -777,9 +826,9 @@ quick_fix() {
             print_info "Running build..."
             ./build.sh
             echo ""
-            read -p "Install locally now? (y/N): " install
+            read -p "Install as ocode now? (y/N): " install
             if [[ $install =~ ^[Yy]$ ]]; then
-                install_local
+                install_ocode
             fi
         else
             print_warning "Don't forget to run: ${BOLD}./build.sh${NC}"
@@ -809,7 +858,7 @@ show_menu() {
     echo ""
     echo "  ${BOLD}Build & Install:${NC}"
     echo "    5. 🔨 Build OpenCode                         - Build binary"
-    echo "    6. 📥 Install Locally                        - Install to ~/.local/bin"
+    echo "    6. 📥 Install as ocode                       - Copy to ~/.local/bin/ocode"
     echo "    7. 🗑️  Uninstall Local                       - Remove local install"
     echo ""
     echo "  ${BOLD}Verification & Testing:${NC}"
@@ -835,7 +884,7 @@ show_menu() {
         3) apply_option2 ;;
         4) restore_original ;;
         5) build_opencode ;;
-        6) install_local ;;
+        6) install_ocode ;;
         7) uninstall_local ;;
         8) verify_setup ;;
         9) verify_installation ;;
@@ -885,6 +934,9 @@ main() {
             "check-install"|"verify-install")
                 verify_installation
                 ;;
+            "install-ocode")
+                install_ocode
+                ;;
             "install")
                 install_local
                 ;;
@@ -910,6 +962,7 @@ main() {
                 echo "  restore          - Restore original"
                 echo "  verify           - Verify patch configuration"
                 echo "  check-install    - Check installation location"
+                echo "  install-ocode    - Copy patched binary to ~/.local/bin/ocode"
                 echo "  install          - Install locally to ~/.local/bin"
                 echo "  uninstall        - Remove local install"
                 echo "  build            - Build OpenCode"
