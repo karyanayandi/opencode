@@ -672,6 +672,55 @@ uninstall_local() {
     fi
 }
 
+# Clear cache
+clear_cache() {
+    print_header "🧹 CLEAR CACHE"
+
+    local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/opencode"
+
+    echo "Cache location: ${BOLD}$cache_dir${NC}"
+    echo ""
+
+    if [ ! -d "$cache_dir" ]; then
+        print_info "Cache directory does not exist. Nothing to clear."
+        return
+    fi
+
+    echo "  ${BOLD}Options:${NC}"
+    echo "    1. Clear plugin cache only  - removes node_modules/ (plugins re-download on next run)"
+    echo "    2. Clear entire cache       - removes everything in $cache_dir"
+    echo "    3. Cancel"
+    echo ""
+
+    read -p "Select (1-3): " choice
+
+    case $choice in
+        1)
+            local plugin_dir="$cache_dir/node_modules"
+            if [ -d "$plugin_dir" ]; then
+                rm -rf "$plugin_dir"
+                rm -f "$cache_dir/package.json"
+                rm -f "$cache_dir/version"
+                print_success "Plugin cache cleared"
+                echo "  Plugins will be re-downloaded fresh on next ocode run."
+            else
+                print_info "Plugin cache already empty."
+            fi
+            ;;
+        2)
+            rm -rf "$cache_dir"
+            print_success "Entire cache cleared"
+            echo "  Everything will be re-downloaded fresh on next ocode run."
+            ;;
+        3)
+            echo "Cancelled."
+            ;;
+        *)
+            print_error "Invalid option"
+            ;;
+    esac
+}
+
 # Build OpenCode
 build_opencode() {
     print_header "🔨 BUILD OPENCODE"

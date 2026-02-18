@@ -346,7 +346,7 @@ index 24dc695d6..a7a0eae8e 100644
    const log = Log.create({ service: "plugin" })
  
 -  const BUILTIN = ["opencode-anthropic-auth@0.0.13"]
-+  const BUILTIN = ["opencode-anthropic-auth@0.0.13", "opencode-copilot-auth@0.0.12"]
++  const BUILTIN = ["opencode-anthropic-auth@0.0.13", "opencode-copilot-auth@0.0.11"]
  
    // Built-in plugins that are directly imported (not installed from npm)
 -  const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
