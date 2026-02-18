@@ -63,8 +63,8 @@ check_environment() {
 detect_state() {
     if [ ! -f "packages/opencode/src/plugin/copilot.ts" ]; then
         echo "option1"  # Option 1 applied (no built-in plugin)
-    elif grep -q "Use npm plugin logic: check if ANY message has role" "packages/opencode/src/plugin/copilot.ts" 2>/dev/null; then
-        echo "option2"  # Option 2 applied (modified built-in)
+    elif grep -q "Use npm plugin logic" "packages/opencode/src/plugin/copilot.ts" 2>/dev/null; then
+        echo "option2"  # Option 2 applied (v1.1.10-style isAgent fix in built-in plugin)
     else
         echo "original"  # Original (expensive) state
     fi
@@ -207,12 +207,10 @@ apply_option1() {
             echo "Cancelled."
             return
         fi
-        # Restore official first
-        "$SCRIPT_DIR/restore-official-copilot.sh"
+        git stash
     elif [ "$state" = "option2" ]; then
         print_info "Option 2 is currently active. Switching to Option 1..."
-        # Restore official first
-        "$SCRIPT_DIR/restore-official-copilot.sh"
+        git stash
     fi
     
     echo ""
@@ -242,12 +240,10 @@ apply_option2() {
             echo "Cancelled."
             return
         fi
-        # Restore official first
-        "$SCRIPT_DIR/restore-official-copilot.sh"
+        git stash
     elif [ "$state" = "option1" ]; then
         print_info "Option 1 is currently active. Switching to Option 2..."
-        # Restore official first
-        "$SCRIPT_DIR/restore-official-copilot.sh"
+        git stash
     fi
     
     echo ""
@@ -286,8 +282,7 @@ restore_original() {
     fi
     
     echo ""
-    "$SCRIPT_DIR/restore-official-copilot.sh"
-    
+    git stash
     echo ""
     print_success "Original configuration restored"
     echo ""
@@ -520,7 +515,7 @@ verify_setup() {
     
     # Check scripts
     print_section "4. Scripts"
-    local scripts=("revert-copilot-auth.sh" "apply-option2-billing-fix.sh" "restore-official-copilot.sh")
+    local scripts=("revert-copilot-auth.sh" "apply-option2-billing-fix.sh")
     for script in "${scripts[@]}"; do
         if [ -f "$SCRIPT_DIR/$script" ] && [ -x "$SCRIPT_DIR/$script" ]; then
             print_success "$script available and executable"
